@@ -122,7 +122,7 @@ class SpriteImage_Block(SLib.SpriteImage):  # 207, 208, 209, 221, 255, 256, 402,
 
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         if self.tilenum < len(SLib.Tiles):
-            painter.drawPixmap(0, 0, SLib.Tiles[self.tilenum].main)
+            painter.drawPixmap(0, 0, SLib.GetTile(self.tilenum))
         painter.drawPixmap(0, 0, self.image)
 
 
@@ -322,7 +322,7 @@ class SpriteImage_SamuraiGuy(SLib.SpriteImage_Static):  # 19
             parent,
             1.5,
             ImageCache['SamuraiGuy'],
-            (-1, 20),
+            (-8, -13),
         )
 
     @staticmethod
@@ -715,15 +715,15 @@ class SpriteImage_NewerParaKoopa(SLib.SpriteImage_StaticMultiple):  # 58
 
         if 'ParaKoopa01' not in ImageCache:
             for flag in (0, 1):
-                for style in range(4):
-                    ImageCache['ParaKoopa%d%d' % (flag, style + 1)] = \
-                        SLib.GetImg('parakoopa_%d%d.png' % (flag, style + 1))
+                for style in range(1, 5):
+                    flag_style = '%d%d' % (flag, style)
+                    ImageCache['ParaKoopa%s' % flag_style] = SLib.GetImg('parakoopa_%s.png' % flag_style)
 
         if 'KoopaShell01' not in ImageCache:
             for flag in (0, 1):
-                for style in range(4):
-                    ImageCache['KoopaShell%d%d' % (flag, style + 1)] = \
-                        SLib.GetImg('koopa_shell_%d%d.png' % (flag, style + 1))
+                for style in range(1, 4):
+                    flag_style = '%d%d' % (flag, style)
+                    ImageCache['KoopaShell%s' % flag_style] = SLib.GetImg('koopa_shell_%s.png' % flag_style)
 
     def dataChanged(self):
         # get properties
@@ -741,7 +741,10 @@ class SpriteImage_NewerParaKoopa(SLib.SpriteImage_StaticMultiple):  # 58
         else:
             if mode == 3:
                 del self.offset
-                self.image = ImageCache['KoopaShell%d%d' % (red, texhack)]
+                if texhack == 4:
+                    self.image = ImageCache['KoopaShellG'] if not red else ImageCache['KoopaShellR']
+                else:
+                    self.image = ImageCache['KoopaShell%d%d' % (red, texhack)]
             else:
                 self.offset = (-8, -12)
                 self.image = ImageCache['ParaKoopa%d%d' % (red, texhack)]
@@ -1085,7 +1088,7 @@ class SpriteImage_MessageBlock(SLib.SpriteImage_Static): # 152
         super().__init__(
             parent,
             1.5,
-            SLib.Tiles[0x98].main,
+            SLib.GetTile(0x98),
             (8, 0)
         )
 
@@ -1268,19 +1271,19 @@ class SpriteImage_TileEventNewer(common.SpriteImage_TileEvent):  # 191
 
     def getTileFromType(self, type_):
         if type_ == 0:
-            return SLib.Tiles[55]
+            return SLib.GetTile(55)
 
         if type_ == 1:
-            return SLib.Tiles[48]
+            return SLib.GetTile(48)
 
         if type_ == 3:
-            return SLib.Tiles[52]
+            return SLib.GetTile(52)
 
         if type_ == 4:
-            return SLib.Tiles[51]
+            return SLib.GetTile(51)
 
         if type_ == 6:
-            return SLib.Tiles[45]
+            return SLib.GetTile(45)
 
         if type_ in [8, 9, 10, 11]:
             row = self.parent.spritedata[2] & 0xF
@@ -1289,13 +1292,13 @@ class SpriteImage_TileEventNewer(common.SpriteImage_TileEvent):  # 191
             tilenum = 256 * (type_ - 8)
             tilenum += row * 16 + col
 
-            return SLib.Tiles[tilenum]
+            return SLib.GetTile(tilenum)
 
         if type_ == 12:
-            return SLib.Tiles[256 * 3 + 67]
+            return SLib.GetTile(256 * 3 + 67)
 
         if type_ == 14:
-            return SLib.Tiles[256]
+            return SLib.GetTile(256)
 
         return None
 
@@ -1623,7 +1626,7 @@ class SpriteImage_EventBlock(SLib.SpriteImage_Static): # 239
         super().__init__(
             parent,
             1.5,
-            SLib.Tiles[0x97].main,
+            SLib.GetTile(0x97),
             (-8, -16)
         )
 
@@ -1815,6 +1818,37 @@ class SpriteImage_NewerMegaBuzzy(SLib.SpriteImage_StaticMultiple):  # 296
         super().dataChanged()
 
 
+class SpriteImage_RockyBossWrench(SLib.SpriteImage_StaticMultiple):  # 302
+    @staticmethod
+    def loadImages():
+        if 'RockyBossWrench0' in ImageCache: return
+        for big in (0, 1):
+            for direction in range(3):
+                ImageCache['RockyBossWrench%d%d' % (big, direction)] = SLib.GetImg('rocky_boss_wrench_%d%d.png' % (big, direction))
+
+    def dataChanged(self):
+        big = (self.parent.spritedata[5] >> 4) & 1
+        direction = self.parent.spritedata[5] & 3
+        if direction == 3:
+            direction = 2
+
+        self.image = ImageCache['RockyBossWrench%d%d' % (big, direction)]
+        if big:
+            self.offset = (
+                    (2, -33),
+                    (-5, -33),
+                    (-11, 5)
+                )[direction]
+        else:
+            self.offset = (
+                    (6, -26),
+                    (-1, -26),
+                    (-5, 11)
+                )[direction]
+
+        super().dataChanged()
+
+
 class SpriteImage_NewerHammerBroPlatform(SpriteImage_NewerHammerBroNormal):  # 308
     pass
 
@@ -1942,15 +1976,25 @@ class SpriteImage_MegaThwomp(SLib.SpriteImage):  # 322
         SLib.loadIfNotInImageCache('MegaThwomp', 'giant_thwomp.png')
 
 
-class SpriteImage_Podoboule(SLib.SpriteImage_StaticMultiple):  # 324
+class SpriteImage_Podouble(SLib.SpriteImage):  # 324
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.aux.append(SLib.AuxiliaryImage(parent, 110, 110))
+        self.aux.append(SLib.AuxiliaryTrackObject(parent, 16, 16, SLib.AuxiliaryTrackObject.Vertical))
+        self.aux[0].setPos(-45, -67)
+        self.aux[1].setPos(0, -288)
+
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('PodobouleFire', 'podoboule_fire.png')
-        SLib.loadIfNotInImageCache('PodobouleIce', 'podoboule_ice.png')
+        SLib.loadIfNotInImageCache('PodoubleFire', 'podouble_fire.png')
+        SLib.loadIfNotInImageCache('PodoubleIce', 'podouble_ice.png')
 
     def dataChanged(self):
         fire = (self.parent.spritedata[2] >> 4) & 1
-        self.image = ImageCache['PodobouleFire' if fire else 'PodobouleIce']
+        distance = self.parent.spritedata[5] & 0xFF
+
+        self.aux[0].image = ImageCache['PodoubleFire' if fire else 'PodoubleIce']
+        self.aux[1].setSize(16, 208 + (distance * 8))
 
         super().dataChanged()
 
@@ -2280,13 +2324,14 @@ ImageClasses = {
     286: SpriteImage_NewerWoodCircle,
     290: SpriteImage_Boolossus,
     296: SpriteImage_NewerMegaBuzzy,
+    302: SpriteImage_RockyBossWrench,
     308: SpriteImage_NewerHammerBroPlatform,
     311: SpriteImage_NewerMegaIcicle,
     319: SpriteImage_Flipblock,
     320: SpriteImage_FallingChestnut,
     321: SpriteImage_ModelLoaderResources,
     322: SpriteImage_MegaThwomp,
-    324: SpriteImage_Podoboule,
+    324: SpriteImage_Podouble,
     341: SpriteImage_NewerBigShell,
     351: SpriteImage_ShyGuy,
     357: SpriteImage_NewerFruit,

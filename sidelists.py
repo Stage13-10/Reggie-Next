@@ -332,13 +332,17 @@ class ObjectPickerWidget(QtWidgets.QListView):
 
                 for row in obj:
                     x = 0
-                    for tile in row:
-                        if tile != -1:
-                            if isinstance(globals_.Tiles[tile].main, QtGui.QImage):
-                                p.drawImage(x, y, globals_.Tiles[tile].main)
+                    for tile_num in row:
+                        if tile_num > 0:
+                            tile = globals_.Tiles[tile_num]
+                            if tile is None:
+                                p.drawPixmap(x, y, globals_.Overrides[globals_.OVERRIDE_UNKNOWN].getCurrentTile())
+                            elif isinstance(tile.main, QtGui.QImage):
+                                p.drawImage(x, y, tile.main)
                             else:
-                                p.drawPixmap(x, y, globals_.Tiles[tile].main)
-                            if isinstance(globals_.Tiles[tile], TilesetTile) and globals_.Tiles[tile].isAnimated: isAnim = True
+                                p.drawPixmap(x, y, tile.main)
+
+                            if isinstance(tile, TilesetTile) and tile.isAnimated: isAnim = True
                         x += 24
                     y += 24
                 p.end()
@@ -895,7 +899,7 @@ class SpriteList(QtWidgets.QWidget):
         "Group", "Bolt", "Target Event", "Triggering Event", "Collection",
         "Location", "Physics", "Message", "Path", "Path Movement", "Red Coin",
         "Hill", "Stretch", "Ray", "Coaster", "Bubble Cannon", "Burner",
-        "Wiggling", "Panel", "Colony", "Entrance",
+        "Wiggling", "Panel", "Colony", "Entrance", "Path Node"
     )
 
     # This should be translated
@@ -906,7 +910,7 @@ class SpriteList(QtWidgets.QWidget):
         "Triggering Event ID", "Collection ID", "Location ID", "Physics ID",
         "Message ID", "Path ID", "Path Movement ID", "Red Coin ID", "Hill ID",
         "Stretch ID", "Ray ID", "Coaster ID", "Bubble Cannon ID", "Burner ID",
-        "Wiggling ID", "Panel ID", "Colony ID", "Entrance ID",
+        "Wiggling ID", "Panel ID", "Colony ID", "Entrance ID", "Path Node ID"
     )
 
     def __init__(self):
@@ -1144,7 +1148,8 @@ class SpriteList(QtWidgets.QWidget):
         self.table.removeRow(row)
 
         # Update search results
-        self.updateItems()
+        if row in self.SearchResults:
+            self.SearchResults = set(x if x < row else x - 1 for x in self.SearchResults if x != row)
 
     def clear(self):
         """

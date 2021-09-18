@@ -678,9 +678,7 @@ class SpriteImage_GiantBubble(SLib.SpriteImage):  # 205, 226
 
     @staticmethod
     def loadImages():
-        if 'GiantBubble0' in ImageCache:
-            return
-
+        if 'GiantBubble0' in ImageCache: return
         for shape in range(3):
             ImageCache['GiantBubble%d' % shape] = SLib.GetImg('giant_bubble_%d.png' % shape)
 
@@ -689,35 +687,30 @@ class SpriteImage_GiantBubble(SLib.SpriteImage):  # 205, 226
 
         self.shape = self.parent.spritedata[4] >> 4
         direction = self.parent.spritedata[5] & 15
-        distance = (self.parent.spritedata[5] >> 4) + 1
+        distance = (self.parent.spritedata[5] & 0xF0) >> 4
 
         if self.shape > 3:
             self.shape = 0
 
-        if self.shape == 0:
-            self.size = (122, 137)
-            HorzOffset = 24
-            VertOffset = 20
-        elif self.shape == 1:
-            self.size = (76, 170)
-            HorzOffset = 28
-            VertOffset = 7
-        elif self.shape == 2:
-            self.size = (160, 81)
-            HorzOffset = 8
-            VertOffset = 28
+        self.size = (
+            (122, 137),
+            (76, 170),
+            (160, 81)
+        )[self.shape]
 
         self.xOffset = -(self.width / 2) + 8
         self.yOffset = -(self.height / 2) + 8
 
-        if direction == 1:  # horizontal
+        if distance == 0:
+            self.aux[0].setSize(0, 0)
+        elif direction == 1:  # horizontal
             self.aux[0].direction = 1
-            self.aux[0].setSize((distance * 32) + self.width - 32, 16)
-            self.aux[0].setPos((-distance * 24) + 24, (self.height / 2) + HorzOffset)
+            self.aux[0].setSize((distance * 32) + self.width, 16)
+            self.aux[0].setPos((-distance * 24), (self.height * 0.75) - 12)
         else:  # vertical
             self.aux[0].direction = 2
-            self.aux[0].setSize(16, (distance * 32) + self.height - 32)
-            self.aux[0].setPos((self.width / 2) + VertOffset, (-distance * 24) + 24)
+            self.aux[0].setSize(16, (distance * 32) + self.height)
+            self.aux[0].setPos((self.width * 0.75) - 12, (-distance * 24))
 
     def paint(self, painter):
         super().paint(painter)
@@ -784,7 +777,7 @@ class SpriteImage_Block(SLib.SpriteImage):  # 207, 208, 209, 221, 255, 256, 402,
 
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         if self.tilenum < len(SLib.Tiles):
-            painter.drawPixmap(0, 0, SLib.Tiles[self.tilenum].main)
+            painter.drawPixmap(0, 0, SLib.GetTile(self.tilenum))
         painter.drawPixmap(0, 0, self.image)
 
 
@@ -1390,17 +1383,29 @@ class SpriteImage_QSwitch(common.SpriteImage_Switch):  # 40
         super().__init__(parent, 1.5)
         self.switchType = 'Q'
 
+    def dataChanged(self):
+        self.offset = (0, 0)
+        super().dataChanged()
+
 
 class SpriteImage_PSwitch(common.SpriteImage_Switch):  # 41
     def __init__(self, parent):
         super().__init__(parent, 1.5)
         self.switchType = 'P'
 
+    def dataChanged(self):
+        self.offset = (0, 0)
+        super().dataChanged()
+
 
 class SpriteImage_ExcSwitch(common.SpriteImage_Switch):  # 42
     def __init__(self, parent):
         super().__init__(parent, 1.5)
         self.switchType = 'E'
+
+    def dataChanged(self):
+        self.offset = (0, 0)
+        super().dataChanged()
 
 
 class SpriteImage_QSwitchBlock(SLib.SpriteImage_StaticMultiple):  # 43
@@ -3482,6 +3487,10 @@ class SpriteImage_QSwitchUnused(common.SpriteImage_Switch):  # 153
         super().__init__(parent, 1.5)
         self.switchType = 'Q'
 
+    def dataChanged(self):
+        self.offset = (0, 0)
+        super().dataChanged()
+
 
 class SpriteImage_StarCoinLineControlled(SpriteImage_StarCoin):  # 155
     pass
@@ -3996,25 +4005,25 @@ class SpriteImage_TileEvent(common.SpriteImage_TileEvent):  # 191
 
     def getTileFromType(self, type_):
         if type_ == 0:
-            return SLib.Tiles[55]
+            return SLib.GetTile(55)
 
         if type_ == 1:
-            return SLib.Tiles[48]
+            return SLib.GetTile(48)
 
         if type_ == 3:
-            return SLib.Tiles[52]
+            return SLib.GetTile(52)
 
         if type_ == 4:
-            return SLib.Tiles[51]
+            return SLib.GetTile(51)
 
         if type_ == 6:
-            return SLib.Tiles[45]
+            return SLib.GetTile(45)
 
         if type_ == 12:
-            return SLib.Tiles[256 * 3 + 67]
+            return SLib.GetTile(256 * 3 + 67)
 
         if type_ == 14:
-            return SLib.Tiles[256]
+            return SLib.GetTile(256)
 
         return None
 
@@ -4909,7 +4918,7 @@ class SpriteImage_FallingLedgeBar(SLib.SpriteImage_Static):  # 242
 class SpriteImage_EventDeactivBlock(SLib.SpriteImage_Static):  # 252
     def __init__(self, parent):
         super().__init__(parent, 1.5)
-        self.image = SLib.Tiles[49].main  # ? block
+        self.image = SLib.GetTile(49)  # ? block
 
 
 class SpriteImage_RotControlledCoin(SpriteImage_SpecialCoin):  # 253
@@ -5640,7 +5649,7 @@ class SpriteImage_LongCannon(SLib.SpriteImage_StaticMultiple):  # 298
         big_s = 'B' if self.big else ''
 
         middle = ImageCache[big_s + 'LongCannonM']
-        solid = SLib.Tiles[1].main
+        solid = SLib.GetTile(1)
         if self.dir == 0: # right
             front = ImageCache[big_s + 'LongCannonFR']
             end = ImageCache[big_s + 'LongCannonEL']
@@ -7053,7 +7062,12 @@ class SpriteImage_WendyKoopaCastleBoss(SLib.SpriteImage):  # 375
         SLib.loadIfNotInImageCache('WendyKoopaCastleBoss', 'wendy_castle_boss.png')
 
 
-class SpriteImage_MovingFence(SLib.SpriteImage_StaticMultiple):  # 376
+class SpriteImage_MovingFence(SLib.SpriteImage):  # 376
+    def __init__(self, parent, scale=1.5):
+        super().__init__(parent, scale)
+        self.spritebox.shown = False
+        self.aux.append(SLib.AuxiliaryTrackObject(parent, 16, 16, SLib.AuxiliaryTrackObject.Horizontal))
+
     @staticmethod
     def loadImages():
         if 'MovingFence0' in ImageCache: return
@@ -7061,22 +7075,37 @@ class SpriteImage_MovingFence(SLib.SpriteImage_StaticMultiple):  # 376
             ImageCache['MovingFence%d' % shape] = SLib.GetImg('moving_fence_%d.png' % shape)
 
     def dataChanged(self):
+        super().dataChanged()
 
         self.shape = (self.parent.spritedata[4] >> 4) & 3
-        arrow = None
+        direction = self.parent.spritedata[5] & 1
+        distance = (self.parent.spritedata[5] & 0xF0) >> 4
 
-        size = (
+        self.size = (
             (64, 64),
             (64, 128),
             (64, 224),
-            (192, 64),
+            (192, 64)
         )[self.shape]
 
-        self.xOffset = -size[0] / 2
-        self.yOffset = -size[1] / 2
-        self.image = ImageCache['MovingFence%d' % self.shape]
+        self.xOffset = -self.size[0] / 2
+        self.yOffset = -self.size[1] / 2
 
-        super().dataChanged()
+        if distance == 0:
+            self.aux[0].setSize(0, 0)
+        elif direction == 1: # horizontal
+            self.aux[0].direction = 1
+            self.aux[0].setSize((distance * 32) + self.width, 16)
+            self.aux[0].setPos(-distance * 24, (self.height * 0.75) - 12)
+        else: # vertical
+            self.aux[0].direction = 2
+            self.aux[0].setSize(16, (distance * 32) + self.height)
+            self.aux[0].setPos((self.width * 0.75) - 12, -distance * 24)
+
+    def paint(self, painter):
+        super().paint(painter)
+
+        painter.drawPixmap(0, 0, ImageCache['MovingFence%d' % self.shape])
 
 
 class SpriteImage_Pipe_Up(SpriteImage_PipeStationary):  # 377
@@ -8343,12 +8372,36 @@ class SpriteImage_LavaIronBlock(SLib.SpriteImage_Static):  # 466
             parent,
             1.5,
             ImageCache['LavaIronBlock'],
-            (-2, -1),
+            (-1, -1),
         )
+
+        self.aux.append(SLib.AuxiliaryTrackObject(parent, 16, 16, SLib.AuxiliaryTrackObject.Horizontal))
 
     @staticmethod
     def loadImages():
         SLib.loadIfNotInImageCache('LavaIronBlock', 'lava_iron_block.png')
+
+    def dataChanged(self):
+        direction = self.parent.spritedata[2] & 3
+        distance = (self.parent.spritedata[4] & 0xF0) >> 4
+
+        if direction <= 1: # horizontal
+            self.aux[0].direction = 1
+            self.aux[0].setSize((distance * 16) + 16, 16)
+        else: # vertical
+            self.aux[0].direction = 2
+            self.aux[0].setSize(16, (distance * 16) + 16)
+
+        if direction == 0: # right
+            self.aux[0].setPos(self.width + 48, self.height / 2)
+        elif direction == 1: # left
+            self.aux[0].setPos((-distance * 24) + 2, self.height / 2)
+        elif direction == 2: # up
+            self.aux[0].setPos((self.width * 0.75) - 12, (-distance * 24))
+        else: # down
+            self.aux[0].setPos((self.width * 0.75) - 12, self.height)
+
+        super().dataChanged()
 
 
 class SpriteImage_MovingGemBlock(SLib.SpriteImage_Static):  # 467
@@ -8359,9 +8412,23 @@ class SpriteImage_MovingGemBlock(SLib.SpriteImage_Static):  # 467
             ImageCache['MovingGemBlock'],
         )
 
+        self.aux.append(SLib.AuxiliaryTrackObject(parent, 16, 16, SLib.AuxiliaryTrackObject.Vertical))
+
     @staticmethod
     def loadImages():
         SLib.loadIfNotInImageCache('MovingGemBlock', 'moving_gem_block.png')
+
+    def dataChanged(self):
+        direction = self.parent.spritedata[2] & 1
+        distance = (self.parent.spritedata[4] & 0xF0) >> 4
+
+        self.aux[0].setSize(16, (distance * 16) + 16)
+        if direction == 0: # up
+            self.aux[0].setPos(self.width / 2, -distance * 24)
+        else: # down
+            self.aux[0].setPos(self.width / 2, self.height - 8)
+
+        super().dataChanged()
 
 
 class SpriteImage_BoltPlatform(SLib.SpriteImage):  # 469
@@ -8613,7 +8680,7 @@ class SpriteImage_FinalBossEffects(SLib.SpriteImage):  # 482
     def dataChanged(self):
         style = self.parent.spritedata[5] & 15
 
-        # Styles greater than 2 crash the game
+        # Styles greater than 2 load nothing
         if style > 2:
             self.aux[0].image = None
 
