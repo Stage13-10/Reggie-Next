@@ -89,7 +89,7 @@ import globals_
 ################################################################################
 
 from libs import lh, lib_versions
-from ui import GetIcon, SetAppStyle, GetDefaultStyle, ListWidgetWithToolTipSignal, LoadNumberFont, LoadTheme
+from ui import GetIcon, SetAppStyle, GetDefaultStyle, ListWidgetWithToolTipSignal, LoadNumberFont, LoadTheme, IconsOnlyTabBar
 from misc import LoadActionsLists, LoadTilesetNames, LoadBgANames, LoadBgBNames, LoadConstantLists, LoadObjDescriptions, LoadSpriteData, LoadSpriteListData, LoadEntranceNames, LoadTilesetInfo, FilesAreMissing, module_path, IsNSMBLevel, ChooseLevelNameDialog, LoadLevelNames, PreferencesDialog, LoadSpriteCategories, ZoomWidget, ZoomStatusWidget, RecentFilesMenu, SetGamePath, isValidGamePath
 from misc2 import LevelScene, LevelViewWidget
 from dirty import setting, setSetting, SetDirty
@@ -814,7 +814,11 @@ class ReggieWindow(QtWidgets.QMainWindow):
         menu.addAction(self.actions['aboutqt'])
         menu.addSeparator()
 
-        if lib_versions["nsmblib"] is not None:
+        if lib_versions["nsmblib-updated"] is not None:
+            value = str(lib_versions["nsmblib-updated"])
+            version = int(value[:4]), int(value[4:6]), int(value[6:8]), int(value[8:10])
+            nsmblib_info_text = "Using NSMBLib Updated %d.%d.%d.%d" % version
+        elif lib_versions["nsmblib"] is not None:
             nsmblib_info_text = "Using NSMBLib %d" % lib_versions["nsmblib"]
         else:
             nsmblib_info_text = "Not using NSMBLib"
@@ -1035,6 +1039,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         # add tabs to it
         tabs = QtWidgets.QTabWidget()
+        tabs.setTabBar(IconsOnlyTabBar())
         tabs.setIconSize(QtCore.QSize(16, 16))
         tabs.currentChanged.connect(self.CreationTabChanged)
         dock.setWidget(tabs)
@@ -1067,11 +1072,17 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.objUseLayer1.setToolTip(globals_.trans.string('Palette', 2))
         self.objUseLayer2 = QtWidgets.QRadioButton('2')
         self.objUseLayer2.setToolTip(globals_.trans.string('Palette', 3))
+
+        self.layerChangeButton = QtWidgets.QPushButton("Change Layer")
+        self.layerChangeButton.clicked.connect(self.ChangeSelectionLayer)
+        self.layerChangeButton.setEnabled(False)
+
         ll.addWidget(QtWidgets.QLabel(globals_.trans.string('Palette', 0)))
         ll.addWidget(self.objUseLayer0)
         ll.addWidget(self.objUseLayer1)
         ll.addWidget(self.objUseLayer2)
         ll.addStretch(1)
+        ll.addWidget(self.layerChangeButton)
         oel.addLayout(ll)
 
         lbg = QtWidgets.QButtonGroup(self)
@@ -2239,15 +2250,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
             return
 
         newID = len(globals_.Level.areas) + 1
-
-        with open(os.path.join("reggiedata", "blankcourse.bin"), 'rb') as blank:
-            course = blank.read()
-
-        L0 = None
-        L1 = None
-        L2 = None
-
-        globals_.Level.appendArea(course, L0, L1, L2)
+        globals_.Level.appendArea(None, None, None, None)
 
         if not self.HandleSave():
             globals_.Level.deleteArea(newID)
@@ -2437,6 +2440,10 @@ class ReggieWindow(QtWidgets.QMainWindow):
         # Full object size settings
         globals_.PlaceObjectsAtFullSize = dlg.generalTab.fullObjSize.isChecked()
         setSetting('PlaceObjectsAtFullSize', globals_.PlaceObjectsAtFullSize)
+
+        # Insert Path Node setting
+        globals_.InsertPathNode = dlg.generalTab.insertPathNode.isChecked()
+        setSetting('InsertPathNode', globals_.InsertPathNode)
 
         # Get the Toolbar tab settings
         boxes = (
@@ -2686,8 +2693,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         for spr in globals_.Area.sprites:
             spr.setVisible(checked)
 
-        self.scene.update()
-
     def HandleSpriteImages(self, checked):
         """
         Handle toggling of sprite images
@@ -2721,10 +2726,10 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 )
 
             spr.ChangingPos = False
+            spr.update()
 
         globals_.DirtyOverride -= 1
 
-        self.scene.update()
         self.levelOverview.update()
 
     def HandleLocationsVisibility(self, checked):
@@ -2740,8 +2745,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         for loc in globals_.Area.locations:
             loc.setVisible(checked)
 
-        self.scene.update()
-
     def HandleCommentsVisibility(self, checked):
         """
         Handle toggling of comment visibility
@@ -2755,8 +2758,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         for com in globals_.Area.comments:
             com.setVisible(checked)
 
-        self.scene.update()
-
     def HandlePathsVisibility(self, checked):
         """
         Handle toggling of path visibility
@@ -2767,13 +2768,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         if globals_.Area is None:
             return
 
-        for node in globals_.Area.paths:
-            node.setVisible(checked)
-
-        for path in globals_.Area.pathdata:
-            path['peline'].setVisible(checked)
-
-        self.scene.update()
+        for path in globals_.Area.paths:
+            path.setVisible(checked)
 
     def HandleObjectsFreeze(self, checked):
         """
@@ -2794,8 +2790,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 obj.setFlag(flag1, unfrozen)
                 obj.setFlag(flag2, unfrozen)
 
-        self.scene.update()
-
     def HandleSpritesFreeze(self, checked):
         """
         Handle toggling of sprites being frozen
@@ -2813,8 +2807,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         for spr in globals_.Area.sprites:
             spr.setFlag(flag1, unfrozen)
             spr.setFlag(flag2, unfrozen)
-
-        self.scene.update()
 
     def HandleEntrancesFreeze(self, checked):
         """
@@ -2834,8 +2826,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
             ent.setFlag(flag1, unfrozen)
             ent.setFlag(flag2, unfrozen)
 
-        self.scene.update()
-
     def HandleLocationsFreeze(self, checked):
         """
         Handle toggling of locations being frozen
@@ -2854,8 +2844,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
             loc.setFlag(flag1, unfrozen)
             loc.setFlag(flag2, unfrozen)
 
-        self.scene.update()
-
     def HandlePathsFreeze(self, checked):
         """
         Handle toggling of path nodes being frozen
@@ -2866,15 +2854,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         if globals_.Area is None:
             return
 
-        flag1 = QtWidgets.QGraphicsItem.ItemIsSelectable
-        flag2 = QtWidgets.QGraphicsItem.ItemIsMovable
-        unfrozen = not checked
-
-        for node in globals_.Area.paths:
-            node.setFlag(flag1, unfrozen)
-            node.setFlag(flag2, unfrozen)
-
-        self.scene.update()
+        for path in globals_.Area.paths:
+            path.set_freeze(checked)
 
     def HandleCommentsFreeze(self, checked):
         """
@@ -2893,8 +2874,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         for com in globals_.Area.comments:
             com.setFlag(flag1, unfrozen)
             com.setFlag(flag2, unfrozen)
-
-        self.scene.update()
 
     def HandleSwitchGrid(self):
         """
@@ -3193,7 +3172,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.UpdateTitle()
 
         # Update UI things
-        self.scene.update(0, 0, self.scene.width(), self.scene.height())
+        self.scene.update()
 
         self.levelOverview.Reset()
         self.levelOverview.update()
@@ -3300,20 +3279,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
             location.UpdateListItem()
 
         for path in globals_.Area.paths:
-            path.positionChanged = self.HandlePathPosChange
-            path.listitem = ListWidgetItem_SortsByOther(path)
-            self.pathList.addItem(path.listitem)
-            self.scene.addItem(path)
-            path.UpdateListItem()
-
-        for path in globals_.Area.pathdata:
-            peline = PathEditorLineItem(path['nodes'])
-            path['peline'] = peline
-            self.scene.addItem(peline)
-            peline.loops = path['loops']
-
-        for path in globals_.Area.paths:
-            path.UpdateListItem()
+            path.add_to_scene()
 
         for com in globals_.Area.comments:
             com.positionChanged = self.HandleComPosChange
@@ -3470,6 +3436,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
             if func_ii(item, type_com): com += 1
 
         self.actions['mergelocations'].setEnabled(loc >= 2)
+        self.layerChangeButton.setEnabled(obj != 0)
 
         # write the statusbar label text
         text = ''
@@ -3601,6 +3568,12 @@ class ReggieWindow(QtWidgets.QMainWindow):
             cpt = -1
 
         globals_.CurrentPaintType = cpt
+
+    def ChangeSelectionLayer(self, checked):
+        """
+        Changes the layer of the selection to the current layer.
+        """
+        self.ChangeSelectedObjectsLayer(globals_.CurrentLayer)
 
     def LayerChoiceChanged(self, nl):
         """
@@ -3782,8 +3755,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         Handle the path being dragged
         """
         if oldx == x and oldy == y: return
-        obj.updatePos()
-        obj.pathinfo['peline'].nodePosChanged()
+        obj.path.node_moved(obj)
         obj.UpdateListItem()
         if obj == self.selObj:
             SetDirty()
@@ -3815,12 +3787,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         if self.UpdateFlag: return
 
-        for ent in globals_.Area.entrances:
-            if ent.listitem == item:
-                break
-        else:
-            return
-
+        ent = item.reference
         ent.ensureVisible(xMargin=192, yMargin=192)
         self.scene.clearSelection()
         ent.setSelected(True)
@@ -3840,12 +3807,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         if self.UpdateFlag: return
 
-        for loc in globals_.Area.locations:
-            if loc.listitem == item:
-                break
-        else:
-            return
-
+        loc = item.reference
         loc.ensureVisible(xMargin=192, yMargin=192)
         self.scene.clearSelection()
         loc.setSelected(True)
@@ -3854,44 +3816,29 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         Handle a location being hovered in the list
         """
-        for loc in globals_.Area.locations:
-            if loc.listitem == item:
-                loc.UpdateListItem(True)
-                break
+        item.reference.UpdateListItem(True)
 
     def HandlePathSelectByList(self, item):
         """
         Handle a path node being selected
         """
-        for path in globals_.Area.paths:
-            if path.listitem == item:
-                break
-        else:
-            return
+        path_item = item.reference
 
-        path.ensureVisible(xMargin=192, yMargin=192)
+        path_item.ensureVisible(xMargin=192, yMargin=192)
         self.scene.clearSelection()
-        path.setSelected(True)
+        path_item.setSelected(True)
 
     def HandlePathToolTipAboutToShow(self, item):
         """
         Handle a path node being hovered in the list
         """
-        for path in globals_.Area.paths:
-            if path.listitem == item:
-                path.UpdateListItem(True)
-                break
+        item.reference.UpdateListItem(True)
 
     def HandleCommentSelectByList(self, item):
         """
         Handle a comment being selected
         """
-        for comment in globals_.Area.comments:
-            if comment.listitem == item:
-                break
-        else:
-            return
-
+        comment = item.reference
         comment.ensureVisible(xMargin=192, yMargin=192)
         self.scene.clearSelection()
         comment.setSelected(True)
@@ -4317,7 +4264,7 @@ def main():
     import subprocess
 
     try:
-        commit_id = subprocess.check_output(["git", "describe", "--always"], stderr=subprocess.DEVNULL).decode().strip()
+        commit_id = subprocess.check_output(["git", "describe", "--always"], stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).decode().strip()
         globals_.ReggieVersionShort += "-" + commit_id
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
@@ -4396,6 +4343,7 @@ def main():
     globals_.EnablePadding = setting('EnablePadding', False)
     globals_.PaddingLength = int(setting('PaddingLength', 0))
     globals_.PlaceObjectsAtFullSize = setting('PlaceObjectsAtFullSize', True)
+    globals_.InsertPathNode = setting('InsertPathNode', False)
     SLib.RealViewEnabled = globals_.RealViewEnabled
 
     # Choose a folder for the game

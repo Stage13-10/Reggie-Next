@@ -128,6 +128,7 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
         self.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
         self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
+        self.setRenderHint(QtGui.QPainter.Antialiasing)
         self.setMouseTracking(True)
         self.YScrollBar = QtWidgets.QScrollBar(QtCore.Qt.Vertical, parent)
         self.XScrollBar = QtWidgets.QScrollBar(QtCore.Qt.Horizontal, parent)
@@ -163,12 +164,12 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
             self.xButtonScrollTimer.start(100)
 
         elif event.button() == QtCore.Qt.RightButton:
+            clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
+            if clicked.x() < 0: clicked.setX(0)
+            if clicked.y() < 0: clicked.setY(0)
+
             if 0 <= globals_.CurrentPaintType < 4 and globals_.CurrentObject != -1 and [globals_.Layer0Shown, globals_.Layer1Shown, globals_.Layer2Shown][globals_.CurrentLayer]:
                 # paint an object
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
-
                 clickedx = int(clicked.x() / 24)
                 clickedy = int(clicked.y() / 24)
 
@@ -184,10 +185,6 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
             elif globals_.CurrentPaintType == 4 and globals_.CurrentSprite >= 0 and globals_.SpritesShown:
                 # paint a sprite
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
-
                 clickedx = int((clicked.x() - 12) / 12) * 8
                 clickedy = int((clicked.y() - 12) / 12) * 8
 
@@ -203,9 +200,6 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
             elif globals_.CurrentPaintType == 5:
                 # paint an entrance
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
                 clickedx = int((clicked.x() - 12) / 1.5)
                 clickedy = int((clicked.y() - 12) / 1.5)
 
@@ -218,111 +212,64 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
             elif globals_.CurrentPaintType == 6 and globals_.PathsShown:
                 # paint a path node
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
                 clickedx = int((clicked.x() - 12) / 1.5)
                 clickedy = int((clicked.y() - 12) / 1.5)
-                mw = globals_.mainWindow
-                plist = mw.pathList
+                plist = globals_.mainWindow.pathList
                 selectedpn = None if not plist.selectedItems() else plist.selectedItems()[0]
 
                 if selectedpn is None:
                     getids = [False for _ in range(256)]
                     getids[0] = True
 
-                    for pathdatax in globals_.Area.pathdata:
-                        getids[int(pathdatax['id'])] = True
+                    for path in globals_.Area.paths:
+                        getids[path._id] = True
 
                     if False not in getids:
                         # There already are 255 paths in this area. That should
                         # be enough. Also, the game doesn't allow path ids greater
                         # than 255 anyway, so just don't let the user create the
                         # path.
-                        globals_.mainWindow.levelOverview.update()
                         return
 
                     newpathid = getids.index(False)
-                    newpathdata = {
-                        'id': newpathid,
-                        'nodes': [{'x': clickedx, 'y': clickedy, 'speed': 0.5, 'accel': 0.00498, 'delay': 0}],
-                        'loops': False,
-                    }
-                    globals_.Area.pathdata.append(newpathdata)
-                    newnode = PathItem(clickedx, clickedy, newpathdata, newpathdata['nodes'][0])
-                    newnode.positionChanged = mw.HandlePathPosChange
 
-                    mw.scene.addItem(newnode)
+                    from levelitems import Path
 
-                    peline = PathEditorLineItem(newpathdata['nodes'])
-                    newpathdata['peline'] = peline
-                    mw.scene.addItem(peline)
+                    path = Path(newpathid, globals_.mainWindow.scene)
+                    path.add_node(clickedx, clickedy)
 
-                    globals_.Area.pathdata.sort(key=lambda path: int(path['id']))
+                    path._nodes[0].listitem.setSelected(True)
+                    path._nodes[0].setSelected(True)
+                    path._nodes[0].positionChanged = globals_.mainWindow.HandlePathPosChange
 
-                    newnode.listitem = ListWidgetItem_SortsByOther(newnode)
-                    plist.clear()
-                    for fpath in globals_.Area.pathdata:
-                        for fpnode in fpath['nodes']:
-                            fpnode['graphicsitem'].listitem = ListWidgetItem_SortsByOther(fpnode['graphicsitem'],
-                                                                                          fpnode[
-                                                                                              'graphicsitem'].ListString())
-                            plist.addItem(fpnode['graphicsitem'].listitem)
-                            fpnode['graphicsitem'].updateId()
-                    newnode.listitem.setSelected(True)
-                    globals_.Area.paths.append(newnode)
+                    globals_.Area.paths.append(path)
 
-                    self.dragstamp = False
-                    self.currentobj = newnode
-                    self.dragstartx = clickedx
-                    self.dragstarty = clickedy
-
-                    newnode.UpdateListItem()
-
-                    SetDirty()
                 else:
-                    pathd = None
-                    for pathnode in globals_.Area.paths:
-                        if pathnode.listitem == selectedpn:
-                            pathd = pathnode.pathinfo
+                    path_node = selectedpn.reference
 
-                    if not pathd: return  # shouldn't happen
+                    path = path_node.path
 
-                    newnodedata = {'x': clickedx, 'y': clickedy, 'speed': 0.5, 'accel': 0.00498, 'delay': 0}
-                    pathd['nodes'].append(newnodedata)
+                    if globals_.InsertPathNode:
+                        idx = path.get_index(path_node) + 1
+                    else:
+                        idx = len(path)
 
-                    newnode = PathItem(clickedx, clickedy, pathd, newnodedata)
+                    path.add_node(clickedx, clickedy, index=idx)
 
-                    newnode.positionChanged = mw.HandlePathPosChange
-                    mw.scene.addItem(newnode)
+                    # The path length changed, so update the editor's maximums
+                    globals_.mainWindow.pathEditor.UpdatePathLength()
 
-                    newnode.listitem = ListWidgetItem_SortsByOther(newnode)
-                    plist.clear()
-                    for fpath in globals_.Area.pathdata:
-                        for fpnode in fpath['nodes']:
-                            fpnode['graphicsitem'].listitem = QtWidgets.QListWidgetItem(
-                                fpnode['graphicsitem'].ListString())
-                            plist.addItem(fpnode['graphicsitem'].listitem)
-                            fpnode['graphicsitem'].updateId()
-                    newnode.listitem.setSelected(True)
+                    path._nodes[idx].positionChanged = globals_.mainWindow.HandlePathPosChange
 
-                    globals_.Area.paths.append(newnode)
-                    pathd['peline'].nodePosChanged()
-                    self.dragstamp = False
-                    self.currentobj = newnode
-                    self.dragstartx = clickedx
-                    self.dragstarty = clickedy
+                self.dragstamp = False
+                self.currentobj = None
+                self.dragstartx = clickedx
+                self.dragstarty = clickedy
 
-                    newnode.UpdateListItem()
-
-                    SetDirty()
+                SetDirty()
 
             elif globals_.CurrentPaintType == 7 and globals_.LocationsShown:
                 # paint a location
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
-
                 clickedx = int(clicked.x() / 1.5)
                 clickedy = int(clicked.y() / 1.5)
 
@@ -335,9 +282,6 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
             elif globals_.CurrentPaintType == 8:
                 # paint a stamp
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
 
                 clickedx = int(clicked.x() / 1.5)
                 clickedy = int(clicked.y() / 1.5)
@@ -362,10 +306,6 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
 
             elif globals_.CurrentPaintType == 9 and globals_.CommentsShown:
                 # paint a comment
-
-                clicked = globals_.mainWindow.view.mapToScene(event.x(), event.y())
-                if clicked.x() < 0: clicked.setX(0)
-                if clicked.y() < 0: clicked.setY(0)
                 clickedx = int((clicked.x() - 12) / 1.5)
                 clickedy = int((clicked.y() - 12) / 1.5)
 
